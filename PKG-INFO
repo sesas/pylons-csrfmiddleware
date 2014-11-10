@@ -1,0 +1,10 @@
+Metadata-Version: 1.0
+Name: csrfmiddleware
+Version: 1.3
+Summary: CSRF Middleware for Pylons, based on Luke Plant's django version.
+Home-page: UNKNOWN
+Author: Luke Plant and David Turner
+Author-email: novalis@openplans.org
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN

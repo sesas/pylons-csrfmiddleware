@@ -1,0 +1,6 @@
+1.3 (2009-02-20)
+----------------
+
+* Use webob for the middleware implementation instead of wsgifilter
+
+* Add explicit dependency on beaker in setup.py
