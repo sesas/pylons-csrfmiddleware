@@ -25,6 +25,8 @@ _CSRF_COOKIE_NAME = 'csrftoken'
 
 _CSRF_HEADER_NAME = 'X-CSRF-Token'
 
+logger = logging.getLogger('csrfmiddleware')
+
 class CsrfMiddleware(object):
     """Middleware that adds protection against Cross Site
     Request Forgeries by adding hidden form fields to POST forms and 
@@ -47,12 +49,12 @@ class CsrfMiddleware(object):
         if _CSRF_HEADER_NAME in request.headers:
             if request.headers.get(_CSRF_HEADER_NAME) == csrf_token:
                 # Valid request. Don't do any checking
-                logging.info('CSRF header checking passed.')
+                logger.debug('CSRF header checking passed.')
                 resp = request.get_response(self.app)
 
-        elif request.referer.startswith(request.host_url):
+        elif (request.referer or '').startswith(request.host_url):
             # Valid referer
-            logging.info('CSRF: Referer header check passed.')
+            logger.debug('CSRF: Referer header check passed.')
             resp = request.get_response(self.app)
 
         elif request.method == 'POST':
