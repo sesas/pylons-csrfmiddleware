@@ -7,10 +7,12 @@ forgeries from other sites.
 This is a Pylons port of Luke Plant's django version.
 
 """
-from webob import Request
-from webob.exc import HTTPForbidden
 import re
 import itertools
+import logging
+
+from webob import Request
+from webob.exc import HTTPForbidden
 
 _ERROR_MSG = 'Cross Site Request Forgery detected. Request aborted.'
 
@@ -18,6 +20,10 @@ _POST_FORM_RE = \
     re.compile(r'(<form\W[^>]*\bmethod=(\'|"|)POST(\'|"|)\b[^>]*>)', re.IGNORECASE)
     
 _HTML_TYPES = ('text/html', 'application/xhtml+xml')    
+
+_CSRF_COOKIE_NAME = 'csrftoken'
+
+_CSRF_HEADER_NAME = 'X-CSRF-Token'
 
 class CsrfMiddleware(object):
     """Middleware that adds protection against Cross Site
@@ -35,14 +41,27 @@ class CsrfMiddleware(object):
         session = environ['beaker.session']
         session.save()
 
-        if request.method == 'POST':
+        csrf_token = session.id
+
+        # Check headers first for CSRF token
+        if _CSRF_HEADER_NAME in request.headers:
+            if request.headers.get(_CSRF_HEADER_NAME) == csrf_token:
+                # Valid request. Don't do any checking
+                logging.info('CSRF header checking passed.')
+                resp = request.get_response(self.app)
+
+        elif request.referer.startswith(request.host_url):
+            # Valid referer
+            logging.info('CSRF: Referer header check passed.')
+            resp = request.get_response(self.app)
+
+        elif request.method == 'POST':
             # check to see if we want to process the post at all
             if (self.unprotected_path is not None
                 and request.path_info.startswith(self.unprotected_path)):
                 resp = request.get_response(self.app)
                 return resp(environ, start_response)
 
-            csrf_token = session.id
             # check incoming token
             try:
                 request_csrf_token = request.POST['csrfmiddlewaretoken']
@@ -59,9 +78,6 @@ class CsrfMiddleware(object):
         if resp.status_int != 200:
             return resp(environ, start_response)
 
-        session = environ['beaker.session']
-        csrf_token = session.id
-
         if resp.content_type.split(';')[0] in _HTML_TYPES:
             # ensure we don't add the 'id' attribute twice (HTML validity)
             idattributes = itertools.chain(('id="csrfmiddlewaretoken"',), 
@@ -75,6 +91,9 @@ class CsrfMiddleware(object):
 
             # Modify any POST forms and fix content-length
             resp.body = _POST_FORM_RE.sub(add_csrf_field, resp.body)
+
+        # Set csrf cookie anyway, cause all responses need it.
+        resp.set_cookie(_CSRF_COOKIE_NAME, csrf_token)
 
         return resp(environ, start_response)
 
