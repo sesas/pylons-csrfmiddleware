@@ -58,30 +58,29 @@ class CsrfMiddleware(object):
             resp = request.get_response(self.app)
 
         elif request.method == 'POST':
-            # check to see if we want to process the post at all
+            # Check to see if we want to process the post at all
             if (self.unprotected_path is not None
                 and request.path_info.startswith(self.unprotected_path)):
                 resp = request.get_response(self.app)
                 return resp(environ, start_response)
 
-            # check incoming token
-            try:
-                request_csrf_token = request.POST['csrfmiddlewaretoken']
-                if request_csrf_token != csrf_token:
-                    resp = HTTPForbidden(_ERROR_MSG)
-                else:
-                    resp = request.get_response(self.app)
-            except KeyError:
+            # Check incoming token
+            request_csrf_token = request.POST.get('csrfmiddlewaretoken', '')
+            if request_csrf_token != csrf_token:
+                logger.info('CSRF: Tokens are not the same {} != {}'.format(request_csrf_token, csrf_token))
                 resp = HTTPForbidden(_ERROR_MSG)
-        # if we're a get, we don't do any checking
+            else:
+                resp = request.get_response(self.app)
+
+        # If we're a get, we don't do any checking
         else:
             resp = request.get_response(self.app)
 
-        if resp.status_int != 200:
-            return resp(environ, start_response)
+        # Set csrf cookie anyway, cause all responses need it.
+        resp.set_cookie(_CSRF_COOKIE_NAME, csrf_token)
 
         if resp.content_type.split(';')[0] in _HTML_TYPES:
-            # ensure we don't add the 'id' attribute twice (HTML validity)
+            # Ensure we don't add the 'id' attribute twice (HTML validity)
             idattributes = itertools.chain(('id="csrfmiddlewaretoken"',), 
                                             itertools.repeat(''))
             def add_csrf_field(match):
@@ -93,9 +92,6 @@ class CsrfMiddleware(object):
 
             # Modify any POST forms and fix content-length
             resp.body = _POST_FORM_RE.sub(add_csrf_field, resp.body)
-
-        # Set csrf cookie anyway, cause all responses need it.
-        resp.set_cookie(_CSRF_COOKIE_NAME, csrf_token)
 
         return resp(environ, start_response)
 
