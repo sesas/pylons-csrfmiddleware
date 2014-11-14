@@ -68,17 +68,9 @@ class CsrfMiddleware(object):
     def is_secure(self, request):
         return request.scheme == 'https'
 
-    def resp(self, resp, environ, start_response):
+    def _check_request(self, request, correct_csrf_token, environ):
 
-        return 
-
-
-    def _check_request(self, request, session, environ):
-
-        correct_csrf_token = hmac.new(self.csrf_secret, session.id).hexdigest()
         incoming_csrf_cookie = request.cookies.get(_CSRF_COOKIE_NAME, '')
-
-        import pdb; pdb.set_trace()
 
         # If basic auth credentials are provided, 
         # assume it's a valid user, and let later layers
@@ -131,7 +123,7 @@ class CsrfMiddleware(object):
                 # and possible for PUT/DELETE.
                 request_csrf_token = request.headers.get(_CSRF_HEADER_NAME, '')
 
-            if not request_csrf_token == csrf_token:
+            if not request_csrf_token == correct_csrf_token:
                 return self._reject(request, REASON_BAD_TOKEN)
 
         # If we're a get, we don't do any checking
@@ -144,10 +136,12 @@ class CsrfMiddleware(object):
         session = environ['beaker.session']
         session.save()
 
-        resp = self._check_request(request, session, environ)
+        correct_csrf_token = hmac.new(self.csrf_secret, session.id).hexdigest()
+
+        resp = self._check_request(request, correct_csrf_token, environ)
 
         # Set csrf cookie anyway, cause all responses need it.
-        resp.set_cookie(_CSRF_COOKIE_NAME, csrf_token)
+        resp.set_cookie(_CSRF_COOKIE_NAME, correct_csrf_token)
 
         if resp.content_type.split(';')[0] in _HTML_TYPES:
             # Ensure we don't add the 'id' attribute twice (HTML validity)
@@ -157,7 +151,7 @@ class CsrfMiddleware(object):
                 """Returns the matched <form> tag plus the added <input> element"""
                 return match.group() + '<div style="display:none;">' + \
                 '<input type="hidden" ' + idattributes.next() + \
-                ' name={} value="'.format(_CSRF_HTML_NAME) + csrf_token + \
+                ' name={} value="'.format(_CSRF_HTML_NAME) + correct_csrf_token + \
                 '" /></div>'
 
             # Modify any POST forms and fix content-length
